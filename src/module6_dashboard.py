@@ -39,9 +39,11 @@ def load_embedder():
 
 @st.cache_resource
 def load_classifier():
-    path = ARTIFACTS_DIR / "baseline_logreg.pkl"
-    if path.exists():
-        return pickle.loads(path.read_bytes())
+    # XGBoost outperforms LogReg on encoding subtypes — prefer it
+    for name in ("baseline_xgb.pkl", "baseline_logreg.pkl"):
+        path = ARTIFACTS_DIR / name
+        if path.exists():
+            return pickle.loads(path.read_bytes())
     return None
 
 
