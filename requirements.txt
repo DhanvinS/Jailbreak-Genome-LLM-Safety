@@ -1,0 +1,25 @@
+# Core
+tqdm>=4.66.0
+numpy>=1.26.0
+pandas>=2.1.0
+matplotlib>=3.8.0
+
+# Data ingestion
+datasets>=2.18.0
+
+# Embeddings & clustering
+sentence-transformers>=2.7.0
+hdbscan>=0.8.33
+umap-learn>=0.5.6
+
+# Classifiers
+scikit-learn>=1.4.0
+xgboost>=2.0.0
+
+# Dashboard
+streamlit>=1.35.0
+plotly>=5.22.0
+
+# QLoRA fine-tuning (install when ready to train)
+# pip install torch transformers peft bitsandbytes trl accelerate
+# Optional faster alternative: pip install unsloth
