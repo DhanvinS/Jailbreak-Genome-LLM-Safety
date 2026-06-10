@@ -97,7 +97,7 @@ def train(X_train: list, y_train: list, X_test: list, y_test: list) -> dict:
 
     # LogReg on embeddings
     print("\n--- Multilingual-E5 + Logistic Regression ---")
-    clf = LogisticRegression(max_iter=1000, C=1.0)
+    clf = LogisticRegression(max_iter=1000, C=1.0, class_weight="balanced")
     clf.fit(X_tr_emb, y_train)
     preds = clf.predict(X_te_emb)
     f1 = f1_score(y_test, preds, average="macro", zero_division=0)

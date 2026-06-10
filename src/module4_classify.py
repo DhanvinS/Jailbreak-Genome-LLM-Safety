@@ -95,7 +95,7 @@ def train(X_train, y_train, X_test, y_test) -> dict:
     print("\n--- TF-IDF + Logistic Regression ---")
     lr_pipe = Pipeline([
         ("tfidf", TfidfVectorizer(ngram_range=(1, 2), max_features=50000, sublinear_tf=True)),
-        ("clf",   LogisticRegression(max_iter=1000, C=1.0)),
+        ("clf",   LogisticRegression(max_iter=1000, C=1.0, class_weight="balanced")),
     ])
     lr_pipe.fit(X_train, y_train)
     y_pred_lr = lr_pipe.predict(X_test)
@@ -120,10 +120,13 @@ def train(X_train, y_train, X_test, y_test) -> dict:
         X_tr_t = tfidf.fit_transform(X_train)
         X_te_t = tfidf.transform(X_test)
 
+        from sklearn.utils.class_weight import compute_sample_weight
+        sample_weights = compute_sample_weight(class_weight="balanced", y=y_tr_enc)
+
         xgb = XGBClassifier(n_estimators=200, max_depth=6, learning_rate=0.1,
                              use_label_encoder=False, eval_metric="mlogloss",
                              verbosity=0, tree_method="hist")
-        xgb.fit(X_tr_t, y_tr_enc)
+        xgb.fit(X_tr_t, y_tr_enc, sample_weight=sample_weights)
         y_pred_xgb = le.inverse_transform(xgb.predict(X_te_t))
         f1_xgb = f1_score(y_test, y_pred_xgb, average="macro", zero_division=0)
         print(classification_report(y_test, y_pred_xgb, zero_division=0))

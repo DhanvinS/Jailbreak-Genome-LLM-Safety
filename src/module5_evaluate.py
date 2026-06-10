@@ -239,7 +239,7 @@ def evaluate_single(held_out: list, judge_sample: int = 0) -> dict:
 
     clf = Pipeline([
         ("tfidf", TfidfVectorizer(ngram_range=(1, 2), max_features=50_000, sublinear_tf=True)),
-        ("clf",   LogisticRegression(max_iter=1000, C=1.0)),
+        ("clf",   LogisticRegression(max_iter=1000, C=1.0, class_weight="balanced")),
     ])
     clf.fit(X_tr, y_tr)
 

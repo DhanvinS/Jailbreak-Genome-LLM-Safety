@@ -15,18 +15,20 @@ if hasattr(sys.stdout, "reconfigure"):
 from db import connect
 
 # Strings that indicate the LLM refused rather than mutated.
-# Specific enough to avoid false positives in legitimate jailbreak prompts.
+# More specific phrases to avoid false positives on legitimate jailbreak prompts
+# (e.g. roleplay templates that say "as an AI" without refusing).
 REFUSAL_PATTERNS = [
     "i can't assist", "i can't help", "i can't provide",
     "i cannot assist", "i cannot help", "i cannot provide",
     "i'm unable to", "i'm not able to",
-    "as an ai, i", "as an ai assistant", "as an ai language",
-    "as a language model,", "as an artificial intelligence",
-    "i apologize, but i", "i'm sorry, but i",
-    "i must decline", "that's not something i can",
-    "i won't assist", "i will not provide", "i will not assist",
-    "i'm not going to help", "i am not going to help",
-    "i'd rather not", "i refuse to",
+    "as an ai, i", "as an ai assistant",
+    "as a language model,",
+    "i apologize, but i",
+    "i'm sorry, but i",
+    "i must decline",
+    "that's not something i can",
+    "i won't assist", "i won't help",
+    "i will not provide", "i will not assist",
 ]
 
 
@@ -37,7 +39,6 @@ def delete_refusals(dry_run: bool = False) -> int:
     to_delete = []
     for row in rows:
         text_lower = row["text"].lower().strip()
-        # Scan whole text — refusals can appear mid-string in LLM outputs
         if any(p in text_lower for p in REFUSAL_PATTERNS):
             to_delete.append(row["id"])
 

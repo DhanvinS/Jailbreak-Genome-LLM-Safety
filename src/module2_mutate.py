@@ -14,18 +14,45 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from llm_runner import generate, MUTATION_MODEL
-from db import get_prompts, insert_prompt, count_prompts, DB_PATH
+from db import get_prompts, insert_prompt, count_prompts
+
+
+# ── Output cleanup ────────────────────────────────────────────────────────────
+
+# Prefixes small LLMs add when they don't follow "output only" instructions
+_BLEED_PREFIXES = [
+    "here's the rewritten", "here is the rewritten",
+    "rewritten request:", "rewritten:", "rewrite:",
+    "here's the translation", "here is the translation",
+    "translation:", "translated:", "english translation:",
+    "here's the paraphrase", "paraphrase:",
+    "output only the rewritten", "output only the translation",
+    "sure, here", "certainly, here", "of course, here",
+]
+
+
+def _clean_llm_output(text: str) -> str:
+    """Strip common preamble phrases that small LLMs add before the actual output."""
+    stripped = text.strip()
+    lower = stripped.lower()
+    for prefix in _BLEED_PREFIXES:
+        if lower.startswith(prefix):
+            # Remove the prefix line and any leading punctuation/whitespace
+            remainder = stripped[len(prefix):].lstrip(": \n")
+            if remainder:
+                return remainder
+    return stripped
 
 
 # Paraphrase
 
 def mutate_paraphrase(text: str) -> str:
     resp = generate(
-        f"Rewrite the following request in completely different words while keeping the exact same intent. "
-        f"Output only the rewritten request, nothing else.\n\nRequest: {text}",
+        f"Rewrite this request using completely different words, same intent. "
+        f"Reply with the rewritten text only — no explanation, no preamble.\n\n{text}",
         model=MUTATION_MODEL, temperature=0.9, max_tokens=200,
     )
-    return resp.response.strip() or text
+    return _clean_llm_output(resp.response) or text
 
 
 # Encoding
@@ -105,16 +132,15 @@ LANGUAGES = ["French", "Spanish", "Chinese", "Arabic", "German", "Japanese"]
 def mutate_multilingual(text: str) -> str:
     lang = random.choice(LANGUAGES)
     resp = generate(
-        f"Translate the following to {lang}. Output only the translation, nothing else.\n\n{text}",
+        f"Translate to {lang}. Reply with the translation only — no explanation.\n\n{text}",
         model=MUTATION_MODEL, temperature=0.3, max_tokens=200,
     )
-    translated = resp.response.strip() or text
-    # Back-translate to English
+    translated = _clean_llm_output(resp.response) or text
     resp2 = generate(
-        f"Translate the following {lang} text to English. Output only the translation.\n\n{translated}",
+        f"Translate to English. Reply with the translation only — no explanation.\n\n{translated}",
         model=MUTATION_MODEL, temperature=0.3, max_tokens=200,
     )
-    return resp2.response.strip() or text
+    return _clean_llm_output(resp2.response) or text
 
 
 # Indirect Injection
