@@ -145,77 +145,134 @@ def analyze_prompt(text: str) -> dict:
     return result
 
 
+# Results tab
+
+def _render_results_tab():
+    from visualize import (plot_auroc_history, plot_f1_history,
+                           plot_corpus_growth, plot_mutation_distance_curve,
+                           plot_fitness_evolution, PLOTS_DIR)
+
+    st.subheader("Run History")
+
+    # Raw log table
+    log_path = PLOTS_DIR.parent / "run_history.jsonl"
+    if log_path.exists():
+        import json
+        entries = [json.loads(l) for l in log_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        if entries:
+            import pandas as pd
+            rows = []
+            for e in entries:
+                row = {"run_id": e["run_id"], "timestamp": e["timestamp"], "module": e["module"]}
+                row.update({f"metric:{k}": v for k, v in e.get("metrics", {}).items()
+                            if isinstance(v, (int, float))})
+                rows.append(row)
+            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+
+    st.divider()
+    st.subheader("Charts")
+
+    if st.button("Regenerate all charts"):
+        plot_auroc_history()
+        plot_f1_history()
+        plot_corpus_growth()
+        plot_mutation_distance_curve()
+        plot_fitness_evolution()
+        st.success("Charts regenerated.")
+
+    chart_defs = [
+        ("latest_auroc_history.png",          "AUROC Across Runs"),
+        ("latest_f1_history.png",             "Classifier F1 Across Runs"),
+        ("latest_corpus_growth.png",          "Corpus Growth"),
+        ("latest_mutation_distance_curve.png","Detection Rate vs Mutation Distance"),
+        ("latest_fitness_evolution.png",      "Fitness Evolution (Module 7)"),
+    ]
+
+    for filename, title in chart_defs:
+        path = PLOTS_DIR / filename
+        if path.exists():
+            st.caption(title)
+            st.image(str(path), use_container_width=True)
+        else:
+            st.info(f"{title} — not generated yet. Click 'Regenerate all charts'.")
+
+
 # Dashboard UI
 
 def main():
     st.set_page_config(page_title="Jailbreak Genome Lab", layout="wide")
     st.title("Jailbreak Genome Lab — Drift & Robustness Dashboard")
 
-    col1, col2 = st.columns([1, 1])
+    tab1, tab2 = st.tabs(["Prompt Analysis", "Results & History"])
 
-    with col1:
-        st.subheader("Analyze a Prompt")
-        prompt_input = st.text_area("Paste a prompt to analyze:", height=150,
-                                    placeholder="Enter any prompt here...")
-        analyze_btn = st.button("Analyze", type="primary")
+    with tab1:
+        col1, col2 = st.columns([1, 1])
 
-        if analyze_btn and prompt_input.strip():
-            with st.spinner("Analyzing..."):
-                result = analyze_prompt(prompt_input.strip())
+        with col1:
+            st.subheader("Analyze a Prompt")
+            prompt_input = st.text_area("Paste a prompt to analyze:", height=150,
+                                        placeholder="Enter any prompt here...")
+            analyze_btn = st.button("Analyze", type="primary")
 
-            family   = result.get("family", "unknown")
-            conf     = result.get("confidence", 0.0)
-            is_novel = result.get("is_novel", False)
+            if analyze_btn and prompt_input.strip():
+                with st.spinner("Analyzing..."):
+                    result = analyze_prompt(prompt_input.strip())
 
-            if is_novel:
-                st.error(f"NOVEL ATTACK DETECTED — Human review needed")
+                family   = result.get("family", "unknown")
+                conf     = result.get("confidence", 0.0)
+                is_novel = result.get("is_novel", False)
+
+                if is_novel:
+                    st.error("NOVEL ATTACK DETECTED — Human review needed")
+                else:
+                    st.success(f"Known family: **{family}**")
+
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Attack Family", family)
+                m2.metric("Confidence", f"{conf:.0%}")
+                m3.metric("Mutation Distance", result.get("mutation_distance", "N/A"))
+
+                if "nearest_text" in result:
+                    st.subheader("Nearest Known Prompt")
+                    st.write(f"Similarity: `{result['nearest_sim']:.3f}`")
+                    st.info(result["nearest_text"])
+
+        with col2:
+            st.subheader("Attack Family Landscape (UMAP)")
+            points = load_umap_points()
+
+            if not points:
+                st.warning("No UMAP data yet. Run Module 3 first.")
             else:
-                st.success(f"Known family: **{family}**")
+                try:
+                    import plotly.express as px
+                    import pandas as pd
 
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Attack Family", family)
-            m2.metric("Confidence", f"{conf:.0%}")
-            m3.metric("Mutation Distance", result.get("mutation_distance", "N/A"))
+                    df = pd.DataFrame(points)
+                    if analyze_btn and prompt_input.strip() and "umap_x" in result:
+                        new_row = pd.DataFrame([{
+                            "x": result["umap_x"], "y": result["umap_y"],
+                            "family": f"NEW: {result.get('family','?')}",
+                            "text_preview": prompt_input[:80],
+                            "source": "input",
+                        }])
+                        df = pd.concat([df, new_row], ignore_index=True)
 
-            if "nearest_text" in result:
-                st.subheader("Nearest Known Prompt")
-                st.write(f"Similarity: `{result['nearest_sim']:.3f}`")
-                st.info(result["nearest_text"])
+                    fig = px.scatter(
+                        df, x="x", y="y", color="family",
+                        hover_data=["text_preview", "source"],
+                        title="Prompt Embedding Space",
+                        width=650, height=550,
+                        opacity=0.6,
+                    )
+                    fig.update_traces(marker_size=4)
+                    st.plotly_chart(fig, use_container_width=True)
+                except ImportError:
+                    st.warning("pip install plotly pandas for interactive chart.")
+                    st.write(f"{len(points)} points in corpus.")
 
-    with col2:
-        st.subheader("Attack Family Landscape (UMAP)")
-        points = load_umap_points()
-
-        if not points:
-            st.warning("No UMAP data yet. Run Module 3 first.")
-        else:
-            try:
-                import plotly.express as px
-                import pandas as pd
-
-                df = pd.DataFrame(points)
-                # If a new point was analyzed, add it
-                if analyze_btn and prompt_input.strip() and "umap_x" in result:
-                    new_row = pd.DataFrame([{
-                        "x": result["umap_x"], "y": result["umap_y"],
-                        "family": f"NEW: {result.get('family','?')}",
-                        "text_preview": prompt_input[:80],
-                        "source": "input",
-                    }])
-                    df = pd.concat([df, new_row], ignore_index=True)
-
-                fig = px.scatter(
-                    df, x="x", y="y", color="family",
-                    hover_data=["text_preview", "source"],
-                    title="Prompt Embedding Space",
-                    width=650, height=550,
-                    opacity=0.6,
-                )
-                fig.update_traces(marker_size=4)
-                st.plotly_chart(fig, use_container_width=True)
-            except ImportError:
-                st.warning("pip install plotly pandas for interactive chart.")
-                st.write(f"{len(points)} points in corpus.")
+    with tab2:
+        _render_results_tab()
 
     # Corpus stats sidebar
     st.sidebar.header("Corpus Stats")
@@ -236,7 +293,7 @@ def main():
     try:
         from db import connect
         with connect() as con:
-            n_seeds = con.execute("SELECT COUNT(*) FROM prompts WHERE parent_id IS NULL").fetchone()[0]
+            n_seeds   = con.execute("SELECT COUNT(*) FROM prompts WHERE parent_id IS NULL").fetchone()[0]
             n_mutated = con.execute("SELECT COUNT(*) FROM prompts WHERE parent_id IS NOT NULL").fetchone()[0]
         st.sidebar.metric("Seeds", n_seeds)
         st.sidebar.metric("Mutations", n_mutated)
