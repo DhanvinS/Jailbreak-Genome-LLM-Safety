@@ -63,11 +63,30 @@ def embed_all(batch_size: int = 256) -> tuple[list[int], np.ndarray]:
     return ids, embeddings
 
 
-def cluster_hdbscan(embeddings: np.ndarray, min_cluster_size: int = 15) -> np.ndarray:
+def cluster_hdbscan(embeddings: np.ndarray, min_cluster_size: int = 15,
+                     umap_first: bool = True) -> np.ndarray:
+    """
+    Cluster embeddings with HDBSCAN.
+    umap_first=True (default): reduce to 10d with UMAP before clustering.
+    HDBSCAN struggles in 384d — UMAP-first drops noise rate significantly.
+    """
     try:
         import hdbscan
     except ImportError:
         raise ImportError("pip install hdbscan")
+
+    if umap_first:
+        try:
+            import umap as umap_lib
+            print("Reducing to 10d with UMAP before clustering...")
+            reducer_10d = umap_lib.UMAP(
+                n_components=10, n_neighbors=15, min_dist=0.0,
+                metric="cosine", random_state=42, verbose=False,
+            )
+            embeddings = reducer_10d.fit_transform(embeddings).astype(np.float32)
+            print(f"  Reduced shape: {embeddings.shape}")
+        except ImportError:
+            print("  umap-learn not found — clustering on raw embeddings.")
 
     print(f"Running HDBSCAN (min_cluster_size={min_cluster_size})...")
     clusterer = hdbscan.HDBSCAN(
@@ -81,7 +100,6 @@ def cluster_hdbscan(embeddings: np.ndarray, min_cluster_size: int = 15) -> np.nd
     noise_pct = (labels == -1).sum() / len(labels) * 100
     print(f"Found {n_clusters} clusters, {noise_pct:.1f}% noise points.")
 
-    # Save clusterer for later (dashboard inference)
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     with open(ARTIFACTS_DIR / "hdbscan_model.pkl", "wb") as f:
         pickle.dump(clusterer, f)
@@ -224,7 +242,7 @@ def run(min_cluster_size: int = 15) -> None:
     ids, embeddings = embed_all()
     print(f"Working with {len(ids)} embeddings.")
 
-    labels = cluster_hdbscan(embeddings, min_cluster_size=min_cluster_size)
+    labels = cluster_hdbscan(embeddings, min_cluster_size=min_cluster_size, umap_first=True)
     coords = reduce_umap(embeddings)
 
     label_map = infer_cluster_labels(ids, labels)
