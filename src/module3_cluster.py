@@ -232,6 +232,12 @@ def run(min_cluster_size: int = 15) -> None:
     export_umap_json(ids, labels, coords, label_map=label_map)
     plot_umap_static(ids, labels, coords, label_map=label_map)
 
+    n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+    noise_pct  = round(sum(1 for l in labels if l == -1) / max(len(labels), 1) * 100, 1)
+    from run_logger import log_run
+    log_run("module3_cluster",
+            metrics={"n_embeddings": len(ids), "n_clusters": n_clusters, "noise_pct": noise_pct},
+            params={"min_cluster_size": min_cluster_size})
     print("\nModule 3: Done.")
     print("Next step: review umap_plot.png and update CLUSTER_LABEL_MAP in this file.")
 

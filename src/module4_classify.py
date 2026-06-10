@@ -151,6 +151,10 @@ def run(held_out: list[str] = None, **_) -> dict:
         return {}
 
     results = train(X_train, y_train, X_test, y_test)
+    from run_logger import log_run
+    log_run("module4_classify",
+            metrics=results,
+            params={"train_size": len(X_train), "test_size": len(X_test), "held_out": held_out})
     print("\nModule 4: Done.")
     return results
 

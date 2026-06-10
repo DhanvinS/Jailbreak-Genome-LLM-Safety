@@ -201,25 +201,38 @@ def run(held_out: list[str] = None, judge_sample: int = 50) -> dict:
     report["mutation_distance_curve"] = curve
 
     # Judge sample evaluation (8B model on held-out prompts)
-    print(f"\nJudge evaluation on {judge_sample} held-out prompts (model={JUDGE_MODEL})...")
-    held_out_rows = X_test[:judge_sample]
-    judge_scores = []
-    for text in held_out_rows:
-        # Ask the model the prompt directly, then judge
-        from llm_runner import generate, MUTATION_MODEL
-        resp = generate(text, model=MUTATION_MODEL, max_tokens=256)
-        result = judge_response(text, resp.response)
-        judge_scores.append(result["fitness"])
+    if judge_sample > 0:
+        print(f"\nJudge evaluation on {judge_sample} held-out prompts (model={JUDGE_MODEL})...")
+        held_out_rows = X_test[:judge_sample]
+        judge_scores = []
+        try:
+            from llm_runner import generate, MUTATION_MODEL
+            for text in held_out_rows:
+                resp = generate(text, model=MUTATION_MODEL, max_tokens=256)
+                result = judge_response(text, resp.response)
+                judge_scores.append(result["fitness"])
+        except ConnectionError as e:
+            print(f"  Skipping judge eval — Ollama not running: {e}")
+            print("  Start Ollama and re-run Module 5, or pass --judge-sample 0 to skip.")
 
-    if judge_scores:
-        avg_compliance = np.mean(judge_scores)
-        print(f"Avg compliance on held-out: {avg_compliance:.3f}")
-        report["judge_avg_compliance_held_out"] = avg_compliance
+        if judge_scores:
+            avg_compliance = np.mean(judge_scores)
+            print(f"Avg compliance on held-out: {avg_compliance:.3f}")
+            report["judge_avg_compliance_held_out"] = avg_compliance
+    else:
+        print("\nJudge evaluation skipped (--judge-sample 0).")
 
     # Save report
     out = RESULTS_DIR / "eval_report.json"
     out.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nReport saved to {out}")
+
+    from run_logger import log_run
+    log_run("module5_evaluate",
+            metrics={k: v for k, v in report.items()
+                     if isinstance(v, (int, float, str))},
+            params={"held_out": held_out, "judge_sample": judge_sample,
+                    "judge_model": JUDGE_MODEL})
     print("Module 5: Done.")
     return report
 

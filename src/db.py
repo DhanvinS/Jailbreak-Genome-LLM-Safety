@@ -25,6 +25,8 @@ def init_db(path: Path = DB_PATH) -> None:
             parent_id   INTEGER REFERENCES prompts(id),
             mutation_op TEXT,          -- which mutator produced this
             embedding   BLOB,          -- serialized float32 numpy array
+            fitness     REAL,          -- judge compliance score 0-1 (set by module7_evolve)
+            generation  INTEGER DEFAULT 0,  -- evolutionary generation (0 = seed)
             created_at  TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS clusters (
@@ -102,3 +104,13 @@ def get_prompts(source: str = None, limit: int = None, path: Path = DB_PATH) -> 
 def count_prompts(path: Path = DB_PATH) -> int:
     with connect(path) as con:
         return con.execute("SELECT COUNT(*) FROM prompts").fetchone()[0]
+
+
+def migrate_add_fitness_columns(path: Path = DB_PATH) -> None:
+    """Add fitness and generation columns to existing DBs (safe no-op if already present)."""
+    with connect(path) as con:
+        existing = {row[1] for row in con.execute("PRAGMA table_info(prompts)")}
+        if "fitness" not in existing:
+            con.execute("ALTER TABLE prompts ADD COLUMN fitness REAL")
+        if "generation" not in existing:
+            con.execute("ALTER TABLE prompts ADD COLUMN generation INTEGER DEFAULT 0")

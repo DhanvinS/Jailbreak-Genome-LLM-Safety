@@ -10,6 +10,7 @@ A local, zero-cost research system for studying LLM robustness by evolving and c
 4. **Classifies** attack families using TF-IDF + Logistic Regression + XGBoost
 5. **Evaluates** open-set recognition — can the classifier flag *unseen* attack families as anomalous?
 6. **Visualizes** everything in a live Streamlit dashboard
+7. **Evolves** a next-generation corpus via fitness-guided selection — score each prompt, select the top performers, mutate them, repeat
 
 Key result: **0.87 AUROC** on held-out attack families (encoding + multilingual) using a TF-IDF + XGBoost classifier.
 
@@ -27,16 +28,18 @@ data/
     baseline_xgb.pkl
   results/
     eval_report.json
+    evolution_report.json   ← per-generation fitness stats
 
 src/
-  db.py              ← SQLite schema + helpers
-  llm_runner.py      ← Ollama HTTP client (llama3.2:3b + llama3.1:8b)
-  module1_ingest.py  ← Dataset download + dedup
-  module2_mutate.py  ← 5 mutation strategies
-  module3_cluster.py ← HDBSCAN + UMAP
-  module4_classify.py← TF-IDF + LogReg + XGBoost
-  module5_evaluate.py← Open-set AUROC + mutation distance curve
+  db.py               ← SQLite schema + helpers
+  llm_runner.py       ← Ollama HTTP client (llama3.2:3b + llama3.1:8b)
+  module1_ingest.py   ← Dataset download + dedup
+  module2_mutate.py   ← 5 mutation strategies
+  module3_cluster.py  ← HDBSCAN + UMAP
+  module4_classify.py ← TF-IDF + LogReg + XGBoost
+  module5_evaluate.py ← Open-set AUROC + mutation distance curve
   module6_dashboard.py← Streamlit UI
+  module7_evolve.py   ← Fitness-guided evolutionary search
 
 run_pipeline.py      ← Master orchestrator
 requirements.txt
@@ -79,6 +82,8 @@ python run_pipeline.py --module 3                   # cluster + UMAP
 python run_pipeline.py --module 4                   # train TF-IDF + XGBoost classifiers
 python run_pipeline.py --module 5                   # open-set AUROC evaluation
 streamlit run src/module6_dashboard.py              # launch dashboard
+python src/module7_evolve.py                        # run evolutionary search (needs Ollama)
+python src/module7_evolve.py --generations 3 --eval-sample 30 --no-llm  # fast test
 ```
 
 ### Useful flags
@@ -86,11 +91,15 @@ streamlit run src/module6_dashboard.py              # launch dashboard
 | Flag | Module | Effect |
 |---|---|---|
 | `--reset` | 1 | Clear DB and re-ingest from scratch |
-| `--no-llm` | 2 | Skip paraphrase/multilingual (no Ollama needed) |
+| `--no-llm` | 2, 7 | Skip paraphrase/multilingual (no Ollama needed) |
 | `--limit N` | 2 | Mutate only first N seeds (for testing) |
 | `--min-cluster-size N` | 3 | HDBSCAN sensitivity (default 15) |
 | `--held-out A B` | 4, 5 | Override which families to hold out for open-set eval |
 | `--judge-sample N` | 5 | How many prompts the 8B model evaluates |
+| `--generations N` | 7 | Number of evolutionary generations (default 3) |
+| `--eval-sample N` | 7 | Prompts scored per generation (default 30) |
+| `--selection-rate F` | 7 | Top fraction selected as parents (default 0.3) |
+| `--start-gen N` | 7 | Resume evolution from generation N |
 
 ### Fastest end-to-end test (no Ollama needed)
 
@@ -105,12 +114,29 @@ streamlit run src/module6_dashboard.py
 
 Completes in ~30–40 minutes on any machine.
 
+### Run the evolutionary loop
+
+Requires Ollama running with both models pulled.
+
+```bash
+# 3 generations, 30 prompts scored per gen, top 30% selected as parents
+python src/module7_evolve.py --generations 3 --eval-sample 30
+
+# Full run (slow — each generation scores 100 prompts with the 8B judge)
+python src/module7_evolve.py --generations 5 --eval-sample 100
+
+# Resume if interrupted (picks up from generation 2)
+python src/module7_evolve.py --start-gen 2 --generations 5
+```
+
+Results are saved to `data/results/evolution_report.json` with per-generation fitness stats.
+
 ## Model strategy
 
 | Task | Model | Why |
 |---|---|---|
-| Mutation generation | `llama3.2:3b` | Speed — runs thousands of mutations overnight |
-| Judge evaluation | `llama3.1:8b-instruct-q4_K_M` | Quality — runs on small held-out set only |
+| Mutation generation (M2, M7) | `llama3.2:3b` | Speed — runs thousands of mutations overnight |
+| Judge evaluation (M5, M7) | `llama3.1:8b-instruct-q4_K_M` | Quality — fitness scoring and held-out eval |
 
 ## Key results (baseline run)
 

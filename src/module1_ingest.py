@@ -17,7 +17,7 @@ if hasattr(sys.stdout, "reconfigure"):
 from db import init_db, bulk_insert_prompts, get_prompts, count_prompts, connect, DB_PATH
 
 
-# ── Dataset loaders ───────────────────────────────────────────────────────────
+# Dataset loaders 
 
 BUILTIN_SEEDS = [
     # direct harm
@@ -83,7 +83,7 @@ BUILTIN_SEEDS = [
 
 
 def load_advbench() -> list[dict]:
-    """AdvBench: try public HuggingFace sources; fall back to built-in seeds."""
+    """AdvBench: try public HuggingFace sources fall back to built-in seeds."""
     from datasets import load_dataset
     # Try non-gated alternative first
     for repo, cfg, split_name in [
@@ -156,7 +156,7 @@ def load_jailbreakbench() -> list[dict]:
         return []
 
 
-# ── Deduplication ─────────────────────────────────────────────────────────────
+# Deduplication
 
 def embed_texts(texts: list[str], batch_size: int = 256) -> np.ndarray:
     from sentence_transformers import SentenceTransformer
@@ -195,7 +195,7 @@ def deduplicate(rows: list[dict], threshold: float = 0.95) -> list[dict]:
     return keep
 
 
-# ── Main ingestion pipeline ───────────────────────────────────────────────────
+# Main ingestion pipeline
 
 def run(dedup: bool = True, threshold: float = 0.95) -> None:
     print("=== Module 1: Data Ingestion ===\n")
@@ -232,7 +232,12 @@ def run(dedup: bool = True, threshold: float = 0.95) -> None:
 
     print("Inserting into SQLite...")
     inserted = bulk_insert_prompts(all_rows)
-    print(f"Inserted {inserted} prompts. DB total: {count_prompts()}")
+    total = count_prompts()
+    print(f"Inserted {inserted} prompts. DB total: {total}")
+    from run_logger import log_run
+    log_run("module1_ingest",
+            metrics={"inserted": inserted, "db_total": total},
+            params={"dedup": dedup, "threshold": threshold})
     print("\nModule 1: Done.")
 
 

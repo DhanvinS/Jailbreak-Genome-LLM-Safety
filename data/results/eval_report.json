@@ -4,32 +4,32 @@
     "multilingual"
   ],
   "seen_families": [
-    "obfuscation",
-    "malware/hacking",
-    "government_decision-making",
-    "encoding_base64",
-    "indirect_injection",
-    "fraud/deception",
-    "sexual/adult_content",
-    "encoding_pig_latin",
-    "encoding_leetspeak",
-    "paraphrase",
-    "roleplay",
-    "token_smuggling",
-    "expert_advice",
-    "disinformation",
     "direct_harm",
-    "physical_harm",
-    "economic_harm",
-    "persona_hijack",
-    "encoding_reverse",
-    "privacy",
+    "malware/hacking",
+    "sexual/adult_content",
+    "encoding_leetspeak",
+    "obfuscation",
     "social_engineering",
+    "physical_harm",
+    "indirect_injection",
+    "government_decision-making",
+    "token_smuggling",
+    "harassment/discrimination",
+    "economic_harm",
     "encoding_unicode_sub",
-    "harassment/discrimination"
+    "disinformation",
+    "privacy",
+    "paraphrase",
+    "encoding_pig_latin",
+    "encoding_reverse",
+    "roleplay",
+    "persona_hijack",
+    "encoding_base64",
+    "expert_advice",
+    "fraud/deception"
   ],
-  "logreg_f1_seen": 0.29186799719887957,
-  "logreg_auroc_unseen": 0.8730555555555556,
+  "logreg_f1_seen": 0.4038851135255791,
+  "logreg_auroc_unseen": 0.9299999999999999,
   "mutation_distance_curve": [
     {
       "hops": 0,
@@ -41,6 +41,5 @@
       "n": 200,
       "detection_rate": 1.0
     }
-  ],
-  "judge_avg_compliance_held_out": 0.31999999999999995
+  ]
 }

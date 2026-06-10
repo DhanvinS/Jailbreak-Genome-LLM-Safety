@@ -29,7 +29,7 @@ ARTIFACTS_DIR  = Path(__file__).parent.parent / "data" / "artifacts"
 CLASSIFIER_DIR = Path(__file__).parent.parent / "data" / "classifier"
 
 
-# ── Cached loaders ────────────────────────────────────────────────────────────
+# Cached loaders 
 
 @st.cache_resource
 def load_embedder():
@@ -87,7 +87,7 @@ def load_corpus_embeddings():
     return ids, texts, embs
 
 
-# ── Analysis helpers ──────────────────────────────────────────────────────────
+# Analysis helpers
 
 def analyze_prompt(text: str) -> dict:
     result = {}
@@ -145,7 +145,7 @@ def analyze_prompt(text: str) -> dict:
     return result
 
 
-# ── Dashboard UI ──────────────────────────────────────────────────────────────
+# Dashboard UI
 
 def main():
     st.set_page_config(page_title="Jailbreak Genome Lab", layout="wide")

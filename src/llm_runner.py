@@ -42,6 +42,13 @@ def _post(endpoint: str, payload: dict) -> dict:
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
             return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            model = payload.get("model", "unknown")
+            raise ConnectionError(
+                f"Model '{model}' not found in Ollama. Run: ollama pull {model}"
+            ) from e
+        raise ConnectionError(f"Ollama HTTP error {e.code}: {e}") from e
     except urllib.error.URLError as e:
         raise ConnectionError(f"Ollama not reachable at {OLLAMA_BASE}. Is it running? ({e})") from e
 

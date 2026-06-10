@@ -208,7 +208,13 @@ def run(mutations_per_seed: int = 4, use_llm: bool = True,
             total = count_prompts()
             print(f"  [{i+1}/{len(seeds)}] DB total: {total} prompts")
 
-    print(f"\nAdded {total_added} mutations. DB total: {count_prompts()}")
+    db_total = count_prompts()
+    print(f"\nAdded {total_added} mutations. DB total: {db_total}")
+    from run_logger import log_run
+    log_run("module2_mutate",
+            metrics={"mutations_added": total_added, "db_total": db_total},
+            params={"mutations_per_seed": mutations_per_seed, "use_llm": use_llm,
+                    "limit": limit, "model": MUTATION_MODEL})
     print("Module 2: Done.")
 
 
