@@ -2,6 +2,8 @@
 
 A local, zero-cost research system for studying LLM robustness by evolving and classifying jailbreak prompts. Built as a portfolio project targeting AI Safety / Integrity roles.
 
+![Jailbreak Genome Lab Dashboard](docs/dashboard.png)
+
 ## What it does
 
 1. **Ingests** real jailbreak datasets (JailbreakBench, LibrAI/do-not-answer, built-in seeds)
@@ -12,7 +14,7 @@ A local, zero-cost research system for studying LLM robustness by evolving and c
 6. **Visualizes** everything in a live Streamlit dashboard
 7. **Evolves** a next-generation corpus via fitness-guided selection — score each prompt, select the top performers, mutate them, repeat
 
-Key result: **0.87 AUROC** on held-out attack families (encoding + multilingual) using a TF-IDF + XGBoost classifier.
+Key results: **0.82 AUROC** on novel attack family detection using embedding-based k-NN (vs 0.32 for TF-IDF). LLM mutations demonstrably reduce classifier confidence, validating the evolutionary evasion hypothesis.
 
 ## Architecture
 
@@ -138,21 +140,61 @@ Results are saved to `data/results/evolution_report.json` with per-generation fi
 | Mutation generation (M2, M7) | `llama3.2:3b` | Speed — runs thousands of mutations overnight |
 | Judge evaluation (M5, M7) | `llama3.1:8b-instruct-q4_K_M` | Quality — fitness scoring and held-out eval |
 
-## Key results (baseline run)
+## Key results
 
+Two runs were compared: **no-LLM mutations** (rule-based only) vs **LLM mutations** (llama3.2:3b paraphrase + multilingual).
+
+### Corpus (after LLM run)
 | Metric | Value |
 |---|---|
-| Corpus size after dedup | 1,085 prompts |
-| Mutations generated | 400 (fast pass, 100 seeds) |
-| HDBSCAN clusters | 8 |
-| LogReg Macro F1 | 0.19 |
-| XGBoost Macro F1 | 0.23 |
-| **AUROC on held-out families** | **0.87** |
-| Detection rate at hop=0 | 100% |
-| Detection rate at hop=1 | 100% |
-| Avg model compliance (8B judge) | 32% |
+| Total prompts | 5,424 |
+| Seeds | 1,085 |
+| Attack families detected | 13 |
+| Largest family | `direct_harm` (1,770) |
 
-The low macro F1 reflects real class imbalance — `direct_harm` makes up ~60% of the corpus. The 0.87 AUROC shows the classifier generalizes to flag unseen attack families even without seeing them during training.
+![Corpus Growth](data/results/plots/latest_corpus_growth.png)
+
+### Novelty Detection — TF-IDF vs Embedding k-NN
+| Method | AUROC (encoding+multilingual held out) |
+|---|---|
+| TF-IDF max-confidence | 0.321 |
+| **Embedding k-NN (multilingual-e5-base)** | **0.816** |
+
+Embeddings are **2.5x better** at flagging novel attack families. This is the core finding.
+
+![AUROC History](data/results/plots/latest_auroc_history.png)
+
+### Classifier F1 over runs
+
+![F1 History](data/results/plots/latest_f1_history.png)
+
+### Open-Set AUROC by held-out family (LLM run)
+| Held-out family | AUROC |
+|---|---|
+| `indirect_injection` | 0.676 |
+| `encoding + multilingual` | 0.675 |
+| `roleplay + persona_hijack` | 0.582 |
+| `paraphrase + token_smuggling` | 0.540 |
+
+### Effect of LLM mutations on evasion
+| Held-out family | No-LLM AUROC | LLM AUROC | Change |
+|---|---|---|---|
+| encoding+multilingual | 0.737 | 0.675 | −0.062 |
+| roleplay+persona_hijack | 0.694 | 0.582 | −0.112 |
+| indirect_injection | 0.746 | 0.676 | −0.070 |
+
+**LLM mutations lower AUROC across all families** — the classifier finds LLM-mutated prompts harder to detect, confirming that language model rewriting produces more evasive variants.
+
+### Mutation distance curve
+
+![Mutation Distance Curve](data/results/plots/latest_mutation_distance_curve.png)
+
+| Hop depth | Detection rate | Novel rate |
+|---|---|---|
+| 0 (original seeds) | 5.5% | 94.5% |
+| 1 (direct mutations) | 72.5% | 27.5% |
+
+Seeds are harder to classify than their mutations, suggesting the originals span diverse styles that blur family boundaries.
 
 ## Attack families
 
