@@ -15,13 +15,24 @@ from db import connect
 ARTIFACTS_DIR = Path(__file__).parent.parent / "data" / "artifacts"
 
 
-# ── Data loading ──────────────────────────────────────────────────────────────
+# ── Data loading (canonical — module5 and module4_v2 import from here) ───────
 
-def load_labeled_data(held_out_families: list[str] = None) -> tuple[list, list, list, list]:
+def expand_held_out(held_out: list, all_labels: set) -> list:
+    """Include encoding_* sub-variants when 'encoding' is held out, etc."""
+    expanded = set(held_out)
+    for h in held_out:
+        for label in all_labels:
+            if label == h or label.startswith(h + "_"):
+                expanded.add(label)
+    return list(expanded)
+
+
+def load_texts_labels() -> tuple[list, list]:
     """
-    Returns (X_train, y_train, X_test, y_test).
+    All labeled prompts as (texts, labels).
     Label priority: manual cluster family_label > mutation_op > attack_type.
-    If held_out_families given, those families go to test only (open-set eval).
+    Note: labels are attack *techniques* (largely the mutation op that produced
+    a prompt), not harm domains — see README "Limitations".
     """
     with connect() as con:
         rows = con.execute("""
@@ -41,11 +52,23 @@ def load_labeled_data(held_out_families: list[str] = None) -> tuple[list, list, 
 
     texts  = [r["text"]  for r in rows if r["label"]]
     labels = [r["label"] for r in rows if r["label"]]
+    return texts, labels
+
+
+def load_labeled_data(held_out_families: list[str] = None) -> tuple[list, list, list, list]:
+    """
+    Returns (X_train, y_train, X_test, y_test).
+    If held_out_families given, those families (sub-variants included) go to
+    test only (open-set eval).
+    """
+    texts, labels = load_texts_labels()
 
     if held_out_families:
+        held = set(expand_held_out(held_out_families, set(labels)))
+        print(f"  Held-out expanded to: {sorted(held)}")
         train_x, train_y, test_x, test_y = [], [], [], []
         for t, l in zip(texts, labels):
-            if l in held_out_families:
+            if l in held:
                 test_x.append(t); test_y.append(l)
             else:
                 train_x.append(t); train_y.append(l)

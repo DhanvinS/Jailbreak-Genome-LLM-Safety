@@ -14,7 +14,7 @@ A local, zero-cost research system for studying LLM robustness by evolving and c
 6. **Visualizes** everything in a live Streamlit dashboard
 7. **Evolves** a next-generation corpus via fitness-guided selection — score each prompt, select the top performers, mutate them, repeat
 
-Key results: **0.82 AUROC** on novel attack family detection using embedding-based k-NN (vs 0.32 for TF-IDF). LLM mutations demonstrably reduce classifier confidence, validating the evolutionary evasion hypothesis.
+Key results: embedding-based k-NN beats a fairly-trained TF-IDF baseline on novel attack technique detection in **3 of 4 holdout sets** (up to **0.82 vs 0.67 AUROC** on encoding+multilingual) — and loses exactly where embedding distance *should* fail (paraphrase, where novel prompts are semantically identical to known ones). See [Limitations](#limitations) for what these numbers do and don't show.
 
 ## Architecture
 
@@ -154,13 +154,18 @@ Two runs were compared: **no-LLM mutations** (rule-based only) vs **LLM mutation
 
 ![Corpus Growth](data/results/plots/latest_corpus_growth.png)
 
-### Novelty Detection — TF-IDF vs Embedding k-NN
-| Method | AUROC (encoding+multilingual held out) |
-|---|---|
-| TF-IDF max-confidence | 0.321 |
-| **Embedding k-NN (multilingual-e5-base)** | **0.816** |
+### Novelty Detection — TF-IDF vs Embedding k-NN (fair comparison)
 
-Embeddings are **2.5x better** at flagging novel attack families. This is the core finding.
+Both methods are trained on the **same holdout-excluded split**, then asked to flag the held-out families as novel. (An earlier version of this comparison reused a TF-IDF model that had seen the held-out families during training, which pushed its AUROC below chance — 0.32 — and inflated the gap. These are the corrected numbers.)
+
+| Held-out set | TF-IDF max-conf | Embedding k-NN (e5-base) | Winner |
+|---|---|---|---|
+| encoding + multilingual | 0.675 | **0.816** | k-NN |
+| roleplay + persona_hijack | 0.582 | **0.741** | k-NN |
+| indirect_injection | 0.676 | **0.752** | k-NN |
+| paraphrase + token_smuggling | **0.540** | 0.442 | TF-IDF |
+
+k-NN wins where novelty has a surface/style signature (encodings, other languages, persona framing) and loses on paraphrase — by construction, paraphrased prompts are semantically identical to known ones, so embedding distance cannot see them as novel. The failure mode is as informative as the wins: novelty detectors need both lexical and semantic signals.
 
 ![AUROC History](data/results/plots/latest_auroc_history.png)
 
@@ -183,7 +188,7 @@ Embeddings are **2.5x better** at flagging novel attack families. This is the co
 | roleplay+persona_hijack | 0.694 | 0.582 | −0.112 |
 | indirect_injection | 0.746 | 0.676 | −0.070 |
 
-**LLM mutations lower AUROC across all families** — the classifier finds LLM-mutated prompts harder to detect, confirming that language model rewriting produces more evasive variants.
+**LLM mutations lower AUROC across all families** — consistent with LLM rewriting producing more evasive variants. Caveat: the two runs differ in corpus composition *and* clustering (69 vs 97 clusters), so part of the drop may be label shift rather than evasiveness; a controlled version of this experiment would hold the clustering fixed and swap only the mutation set.
 
 ### Mutation distance curve
 
@@ -194,7 +199,16 @@ Embeddings are **2.5x better** at flagging novel attack families. This is the co
 | 0 (original seeds) | 5.5% | 94.5% |
 | 1 (direct mutations) | 72.5% | 27.5% |
 
-Seeds are harder to classify than their mutations, suggesting the originals span diverse styles that blur family boundaries.
+The classifier is far more confident on mutations than on original seeds. This is mostly a class-prior effect — the training corpus is 80% mutations, so the model is fitted to mutation styles — and it means the dashboard's 0.40 novelty threshold would flag nearly every original-style jailbreak for human review. The curve currently only covers hops 0–1; deeper lineage requires running Module 7 evolution.
+
+## Limitations
+
+Honest scoping of what the numbers above show:
+
+1. **Labels are attack *techniques*, not harm domains.** ~80% of the corpus is mutations, labeled by the mutation operator that produced them (87% of seeds share one harm label, `direct_harm`). "Detect a novel family" therefore means "detect the output of a held-out transformation technique" — a real and useful task (new obfuscation styles appear in the wild), but not the same as detecting novel harmful *intent*. The paraphrase holdout is nearly self-defeating by construction, which is why every method scores at or below chance on it.
+2. **Per-family classification is weak** (0.41–0.43 macro F1). Partly label noise from the technique/family conflation above; the AUROC results are the robust finding, not the classifier itself.
+3. **The LLM-evasion comparison is confounded** by clustering changes between runs (see caveat above).
+4. **Judge scores** (when enabled) come from a 3B/8B local model; parse failures are tracked and excluded from averages rather than silently scored as 0.5.
 
 ## Attack families
 

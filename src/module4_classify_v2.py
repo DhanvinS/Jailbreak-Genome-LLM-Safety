@@ -128,69 +128,87 @@ def train(X_train: list, y_train: list, X_test: list, y_test: list) -> dict:
 
 # ── AUROC comparison ──────────────────────────────────────────────────────────
 
-def compare_auroc(held_out: list = None) -> dict:
+def compare_auroc(holdout_sets: list = None) -> dict:
     """
-    Compare TF-IDF max-confidence vs k-NN distance as novelty signals.
-    Uses proper val-split negatives (same methodology as fixed module5).
+    Compare TF-IDF max-confidence vs k-NN distance as novelty signals,
+    across every holdout set (not just the most favorable one).
+
+    Fairness: BOTH methods are trained on the same holdout-excluded 80%
+    split. The previous version reused baseline_logreg.pkl — trained on a
+    random split that INCLUDED the held-out families — so its confident
+    (correct) predictions on "unseen" prompts pushed TF-IDF AUROC below
+    chance and inflated the gap.
     """
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import train_test_split
+    from sklearn.pipeline import Pipeline
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.linear_model import LogisticRegression
     from collections import Counter
 
-    held_out = held_out or ["encoding", "multilingual"]
+    from module4_classify import load_texts_labels, expand_held_out
+    if holdout_sets is None:
+        from module5_evaluate import MULTI_HOLDOUT_SETS
+        holdout_sets = MULTI_HOLDOUT_SETS
 
-    from module5_evaluate import load_labeled_data, expand_held_out
-    X_train, y_train, X_unseen, _ = load_labeled_data(held_out_families=held_out)
-
-    counts = Counter(y_train)
-    can_strat = all(v >= 2 for v in counts.values())
-    X_tr, X_seen_val, y_tr, _ = train_test_split(
-        X_train, y_train, test_size=0.2, random_state=42,
-        stratify=y_train if can_strat else None,
-    )
+    texts, labels = load_texts_labels()
+    all_label_set = set(labels)
 
     embedder = get_embedder()
-    print("Embedding for AUROC comparison...")
-    X_tr_emb  = embed(X_tr, embedder)
-    X_val_emb = embed(X_seen_val, embedder)
-    X_uns_emb = embed(X_unseen, embedder)
+    print(f"Embedding full corpus once ({len(texts)} prompts)...")
+    all_embs = embed(texts, embedder)
 
-    # Load trained classifiers
-    logreg_path = ARTIFACTS_DIR / "baseline_logreg.pkl"
-    emb_path    = ARTIFACTS_DIR / "emb_logreg.pkl"
-    knn_path    = ARTIFACTS_DIR / "knn_novelty.pkl"
+    table = {}
+    for hset in holdout_sets:
+        key = "+".join(hset)
+        held = set(expand_held_out(hset, all_label_set))
+        seen_idx   = [i for i, l in enumerate(labels) if l not in held]
+        unseen_idx = [i for i, l in enumerate(labels) if l in held]
+        if not seen_idx or not unseen_idx:
+            print(f"  {key}: skipped (degenerate split)")
+            continue
 
-    results = {"held_out": held_out}
+        y_seen = [labels[i] for i in seen_idx]
+        counts = Counter(y_seen)
+        can_strat = all(v >= 2 for v in counts.values())
+        tr_idx, val_idx = train_test_split(
+            seen_idx, test_size=0.2, random_state=42,
+            stratify=y_seen if can_strat else None,
+        )
 
-    # TF-IDF max-confidence AUROC (from module4 baseline)
-    if logreg_path.exists():
-        tfidf_clf = pickle.loads(logreg_path.read_bytes())
-        X_all = X_unseen + X_seen_val
-        y_bin = [1] * len(X_unseen) + [0] * len(X_seen_val)
-        max_conf = tfidf_clf.predict_proba(X_all).max(axis=1)
+        y_bin = [1] * len(unseen_idx) + [0] * len(val_idx)
+
+        # TF-IDF max-confidence — retrained without the held-out families
+        tfidf_clf = Pipeline([
+            ("tfidf", TfidfVectorizer(ngram_range=(1, 2), max_features=50_000,
+                                      sublinear_tf=True)),
+            ("clf",   LogisticRegression(max_iter=1000, C=1.0,
+                                         class_weight="balanced")),
+        ])
+        tfidf_clf.fit([texts[i] for i in tr_idx], [labels[i] for i in tr_idx])
+        max_conf = tfidf_clf.predict_proba(
+            [texts[i] for i in unseen_idx + val_idx]).max(axis=1)
         auroc_tfidf = float(roc_auc_score(y_bin, 1.0 - max_conf))
-        results["tfidf_auroc"] = round(auroc_tfidf, 4)
-        print(f"TF-IDF max-conf AUROC : {auroc_tfidf:.4f}")
 
-    # Embedding k-NN distance AUROC
-    if knn_path.exists():
-        knn = pickle.loads(knn_path.read_bytes())
-        knn.fit(X_tr_emb)
-        novel_scores_unseen = knn.novelty_scores(X_uns_emb)
-        novel_scores_seen   = knn.novelty_scores(X_val_emb)
-        scores_all = np.concatenate([novel_scores_unseen, novel_scores_seen])
-        y_bin_arr  = np.array([1] * len(X_uns_emb) + [0] * len(X_val_emb))
-        auroc_knn = float(roc_auc_score(y_bin_arr, scores_all))
-        results["knn_auroc"] = round(auroc_knn, 4)
-        print(f"k-NN distance AUROC   : {auroc_knn:.4f}")
+        # Embedding k-NN distance — same train split
+        knn = KNNNoveltyDetector(k=5).fit(all_embs[tr_idx])
+        scores = np.concatenate([knn.novelty_scores(all_embs[unseen_idx]),
+                                 knn.novelty_scores(all_embs[val_idx])])
+        auroc_knn = float(roc_auc_score(np.array(y_bin), scores))
 
-    if "tfidf_auroc" in results and "knn_auroc" in results:
-        winner = "knn" if results["knn_auroc"] > results["tfidf_auroc"] else "tfidf"
-        delta  = abs(results["knn_auroc"] - results["tfidf_auroc"])
-        print(f"\nBetter method: {winner} (+{delta:.4f})")
-        results["better_method"] = winner
+        winner = "knn" if auroc_knn > auroc_tfidf else "tfidf"
+        table[key] = {
+            "held_out": hset,
+            "n_train": len(tr_idx),
+            "n_seen_val": len(val_idx),
+            "n_unseen": len(unseen_idx),
+            "tfidf_auroc": round(auroc_tfidf, 4),
+            "knn_auroc": round(auroc_knn, 4),
+            "better_method": winner,
+        }
+        print(f"  {key:35s} tfidf={auroc_tfidf:.4f}  knn={auroc_knn:.4f}  → {winner}")
 
-    return results
+    return {"holdout_table": table}
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -207,8 +225,8 @@ def run(held_out: list = None, compare: bool = True) -> dict:
     results = train(X_train, y_train, X_test, y_test)
 
     if compare:
-        print("\n=== AUROC Comparison: TF-IDF vs Embedding k-NN ===")
-        auroc_results = compare_auroc(held_out=held_out)
+        print("\n=== AUROC Comparison: TF-IDF vs Embedding k-NN (all holdouts) ===")
+        auroc_results = compare_auroc(holdout_sets=[held_out] if held_out else None)
         results.update(auroc_results)
 
         out = RESULTS_DIR / "auroc_comparison.json"

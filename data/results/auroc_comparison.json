@@ -1,9 +1,51 @@
 {
-  "held_out": [
-    "encoding",
-    "multilingual"
-  ],
-  "tfidf_auroc": 0.3211,
-  "knn_auroc": 0.8159,
-  "better_method": "knn"
+  "holdout_table": {
+    "encoding+multilingual": {
+      "held_out": [
+        "encoding",
+        "multilingual"
+      ],
+      "n_train": 3086,
+      "n_seen_val": 772,
+      "n_unseen": 1566,
+      "tfidf_auroc": 0.6745,
+      "knn_auroc": 0.8159,
+      "better_method": "knn"
+    },
+    "roleplay+persona_hijack": {
+      "held_out": [
+        "roleplay",
+        "persona_hijack"
+      ],
+      "n_train": 3803,
+      "n_seen_val": 951,
+      "n_unseen": 670,
+      "tfidf_auroc": 0.5822,
+      "knn_auroc": 0.7412,
+      "better_method": "knn"
+    },
+    "paraphrase+token_smuggling": {
+      "held_out": [
+        "paraphrase",
+        "token_smuggling"
+      ],
+      "n_train": 3944,
+      "n_seen_val": 987,
+      "n_unseen": 493,
+      "tfidf_auroc": 0.54,
+      "knn_auroc": 0.4422,
+      "better_method": "tfidf"
+    },
+    "indirect_injection": {
+      "held_out": [
+        "indirect_injection"
+      ],
+      "n_train": 3764,
+      "n_seen_val": 942,
+      "n_unseen": 718,
+      "tfidf_auroc": 0.6763,
+      "knn_auroc": 0.7519,
+      "better_method": "knn"
+    }
+  }
 }

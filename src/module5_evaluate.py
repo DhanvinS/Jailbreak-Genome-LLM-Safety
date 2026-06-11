@@ -64,65 +64,18 @@ def judge_response(prompt: str, response: str) -> dict:
             data = json.loads(match.group())
             score = float(data.get("score", 5))
             return {"score": score, "verdict": data.get("verdict", "PARTIAL"),
-                    "fitness": score / 10.0}
+                    "fitness": score / 10.0, "parse_failed": False}
         except Exception:
             pass
-    return {"score": 5.0, "verdict": "PARTIAL", "fitness": 0.5}
+    # Parse failure: flagged so callers can exclude it instead of letting a
+    # silent 0.5 drag every average toward the middle.
+    return {"score": 5.0, "verdict": "PARSE_FAIL", "fitness": 0.5,
+            "parse_failed": True}
 
 
-# ── Label helpers ─────────────────────────────────────────────────────────────
+# ── Data loading (canonical versions live in module4_classify) ───────────────
 
-def expand_held_out(held_out: list, all_labels: set) -> list:
-    """Include encoding_* sub-variants when 'encoding' is held out, etc."""
-    expanded = set(held_out)
-    for h in held_out:
-        for label in all_labels:
-            if label == h or label.startswith(h + "_"):
-                expanded.add(label)
-    return list(expanded)
-
-
-# ── Data loading ──────────────────────────────────────────────────────────────
-
-def load_labeled_data(held_out_families: list = None):
-    with connect() as con:
-        rows = con.execute("""
-            SELECT p.text,
-                COALESCE(
-                    CASE WHEN c.family_label IS NOT NULL
-                              AND c.family_label != 'noise'
-                              AND c.family_label NOT LIKE 'cluster_%'
-                         THEN c.family_label ELSE NULL END,
-                    p.mutation_op,
-                    p.attack_type
-                ) AS label
-            FROM prompts p
-            LEFT JOIN clusters c ON c.prompt_id = p.id
-            WHERE p.attack_type IS NOT NULL OR p.mutation_op IS NOT NULL
-        """).fetchall()
-
-    texts  = [r["text"]  for r in rows if r["label"]]
-    labels = [r["label"] for r in rows if r["label"]]
-
-    if held_out_families:
-        all_labels = set(labels)
-        held_out_expanded = expand_held_out(held_out_families, all_labels)
-        print(f"  Held-out expanded to: {sorted(held_out_expanded)}")
-
-        train_x, train_y, test_x, test_y = [], [], [], []
-        for t, l in zip(texts, labels):
-            if l in held_out_expanded:
-                test_x.append(t); test_y.append(l)
-            else:
-                train_x.append(t); train_y.append(l)
-        return train_x, train_y, test_x, test_y
-
-    from sklearn.model_selection import train_test_split
-    from collections import Counter
-    counts = Counter(labels)
-    can_stratify = all(v >= 2 for v in counts.values())
-    return train_test_split(texts, labels, test_size=0.2, random_state=42,
-                            stratify=labels if can_stratify else None)
+from module4_classify import expand_held_out, load_labeled_data  # noqa: E402
 
 
 # ── AUROC ─────────────────────────────────────────────────────────────────────
@@ -261,17 +214,25 @@ def evaluate_single(held_out: list, judge_sample: int = 0) -> dict:
 
     if judge_sample > 0:
         print(f"  Judge eval on {judge_sample} unseen prompts...")
-        judge_scores = []
+        judge_scores, parse_fails, attempted = [], 0, 0
         try:
             from llm_runner import generate, MUTATION_MODEL
             for text in X_unseen[:judge_sample]:
                 resp = generate(text, model=MUTATION_MODEL, max_tokens=256)
                 score = judge_response(text, resp.response)
-                judge_scores.append(score["fitness"])
+                attempted += 1
+                if score["parse_failed"]:
+                    parse_fails += 1
+                else:
+                    judge_scores.append(score["fitness"])
         except ConnectionError as e:
             print(f"  Skipping judge eval — Ollama not running: {e}")
         if judge_scores:
             result["judge_avg_compliance"] = round(float(np.mean(judge_scores)), 4)
+        if attempted:
+            result["judge_parse_fail_rate"] = round(parse_fails / attempted, 4)
+            if parse_fails:
+                print(f"  Judge parse failures: {parse_fails}/{attempted} (excluded from average)")
 
     return result
 

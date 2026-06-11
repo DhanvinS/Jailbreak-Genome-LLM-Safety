@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.tmp.*
+etc/
+share/
+.ipynb_checkpoints/

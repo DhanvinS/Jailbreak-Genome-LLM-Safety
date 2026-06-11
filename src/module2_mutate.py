@@ -2,7 +2,7 @@
 Module 2: LLM-Powered Mutation Engine
 5 strategies: paraphrase, encoding, roleplay, multilingual, indirect injection
 Uses llama3.2:3b for all mutations (speed over quality).
-Generates 3-5 mutations per seed → corpus grows to ~20k-25k prompts.
+Generates 4 mutations per seed by default → ~1k seeds grow to ~5.4k prompts.
 """
 import base64
 import random
