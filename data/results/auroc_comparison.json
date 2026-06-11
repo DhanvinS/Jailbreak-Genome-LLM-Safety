@@ -1,0 +1,9 @@
+{
+  "held_out": [
+    "encoding",
+    "multilingual"
+  ],
+  "tfidf_auroc": 0.3211,
+  "knn_auroc": 0.8159,
+  "better_method": "knn"
+}

@@ -1,0 +1,76 @@
+{
+  "encoding+multilingual": {
+    "held_out": [
+      "encoding",
+      "multilingual"
+    ],
+    "n_train": 3086,
+    "n_seen_val": 772,
+    "n_unseen": 1566,
+    "logreg_f1_seen": 0.2076,
+    "logreg_auroc_unseen": 0.6745
+  },
+  "roleplay+persona_hijack": {
+    "held_out": [
+      "roleplay",
+      "persona_hijack"
+    ],
+    "n_train": 3803,
+    "n_seen_val": 951,
+    "n_unseen": 670,
+    "logreg_f1_seen": 0.4468,
+    "logreg_auroc_unseen": 0.5822
+  },
+  "paraphrase+token_smuggling": {
+    "held_out": [
+      "paraphrase",
+      "token_smuggling"
+    ],
+    "n_train": 3944,
+    "n_seen_val": 987,
+    "n_unseen": 493,
+    "logreg_f1_seen": 0.4033,
+    "logreg_auroc_unseen": 0.54
+  },
+  "indirect_injection": {
+    "held_out": [
+      "indirect_injection"
+    ],
+    "n_train": 3764,
+    "n_seen_val": 942,
+    "n_unseen": 718,
+    "logreg_f1_seen": 0.4602,
+    "logreg_auroc_unseen": 0.6763
+  },
+  "auroc_table": {
+    "encoding+multilingual": 0.6745,
+    "roleplay+persona_hijack": 0.5822,
+    "paraphrase+token_smuggling": 0.54,
+    "indirect_injection": 0.6763
+  },
+  "held_out": [
+    "encoding",
+    "multilingual"
+  ],
+  "n_train": 3086,
+  "n_seen_val": 772,
+  "n_unseen": 1566,
+  "logreg_f1_seen": 0.2076,
+  "logreg_auroc_unseen": 0.6745,
+  "mutation_distance_curve": [
+    {
+      "hops": 0,
+      "n": 200,
+      "detection_rate": 0.055,
+      "novel_rate": 0.945,
+      "mean_confidence": 0.2667
+    },
+    {
+      "hops": 1,
+      "n": 200,
+      "detection_rate": 0.725,
+      "novel_rate": 0.275,
+      "mean_confidence": 0.6027
+    }
+  ]
+}

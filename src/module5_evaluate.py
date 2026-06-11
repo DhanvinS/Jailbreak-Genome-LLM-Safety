@@ -311,9 +311,14 @@ def run(held_out: list = None, judge_sample: int = 0,
     print("\nMutation distance vs detection rate:")
     report["mutation_distance_curve"] = mutation_distance_curve()
 
+    from datetime import datetime
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out = RESULTS_DIR / "eval_report.json"
-    out.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"\nReport saved to {out}")
+    out_ts = RESULTS_DIR / f"eval_report_{ts}.json"
+    payload = json.dumps(report, indent=2, ensure_ascii=False)
+    out.write_text(payload, encoding="utf-8")
+    out_ts.write_text(payload, encoding="utf-8")
+    print(f"\nReport saved to {out} (also {out_ts.name})")
 
     log_run("module5_evaluate",
             metrics={k: v for k, v in report.items() if isinstance(v, (int, float))},

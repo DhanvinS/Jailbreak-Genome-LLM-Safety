@@ -68,6 +68,14 @@ def main():
         from module5_evaluate import run as evaluate
         evaluate(held_out=args.held_out, judge_sample=args.judge_sample)
 
+    if run_all or args.module in (4, 5):
+        try:
+            from visualize import save_all
+            print("\nGenerating charts...")
+            save_all()
+        except Exception as e:
+            print(f"  [visualize] skipped: {e}")
+
     if run_all:
         print("\n=== Full pipeline complete ===")
         print("  streamlit run src/module6_dashboard.py")
