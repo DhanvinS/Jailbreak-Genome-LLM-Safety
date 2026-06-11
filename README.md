@@ -2,7 +2,7 @@
 
 A local, zero-cost research system for studying LLM robustness by evolving and classifying jailbreak prompts. Built as a portfolio project targeting AI Safety / Integrity roles.
 
-![Jailbreak Genome Lab Dashboard](docs/dashboard.png)
+![Jailbreak Genome Lab Dashboard](docs/Screenshot 2026-06-10 220618.png)
 
 ## What it does
 
